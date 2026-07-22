@@ -6137,7 +6137,8 @@ static json_t *parse_submit(stratum_instance_t *client, json_t *json_msg,
 	char hexhash[68] = {}, sharehash[32], cdfield[64];
 	user_instance_t *user = client->user_instance;
 	char *fname = NULL, *s, *nonce, *nonce2;
-	uint32_t ntime32, version_mask32 = 0;
+	uint32_t ntime32, ntime_min, version_mask32 = 0;
+	uint64_t ntime_max;
 	sdata_t *sdata = client->sdata;
 	enum share_err err = SE_NONE;
 	ckpool_t *ckp = client->ckp;
@@ -6290,8 +6291,37 @@ static json_t *parse_submit(stratum_instance_t *client, json_t *json_msg,
 		goto out_submit;
 	}
 no_stale:
-	/* Ntime cannot be less, but allow forward ntime rolling up to max */
-	if (ntime32 < wb->ntime32 || ntime32 > wb->ntime32 + 7000) {
+	/*
+	 * Radiant IceRiver firmware may continue rolling an older timestamp
+	 * that is still valid according to the block template's mintime.
+	 */
+	ntime_min = wb->ntime32;
+	ntime_max = (uint64_t)wb->ntime32 + 7000;
+
+	if (ckp->pow_algo == POW_ALGO_SHA512_256D) {
+		json_t *mintime_val = wb->json ?
+			json_object_get(wb->json, "mintime") : NULL;
+		json_int_t mintime_int = mintime_val ?
+			json_integer_value(mintime_val) : 0;
+
+		if (mintime_int > 0 &&
+		    (uint64_t)mintime_int <= UINT32_MAX &&
+		    (uint32_t)mintime_int <= wb->ntime32)
+			ntime_min = (uint32_t)mintime_int;
+
+		ntime_max = (uint64_t)now_t + 7200;
+	}
+
+	if ((uint64_t)ntime32 < ntime_min ||
+	    (uint64_t)ntime32 > ntime_max) {
+		LOGWARNING("Client %s Ntime out of range: submitted=%u min=%u job=%u max=%llu now=%ld jobid=%s",
+			client->identity,
+			ntime32,
+			ntime_min,
+			wb->ntime32,
+			(unsigned long long)ntime_max,
+			(long)now_t,
+			job_id);
 		err = SE_NTIME_INVALID;
 		json_set_string(json_msg, "reject-reason", SHARE_ERR(err));
 		goto out_put;
