@@ -4720,7 +4720,7 @@ static void *blockupdate(void *arg)
 					update_base(sdata, GEN_PRIORITY);
 					break;
 				}
-				[[fallthrough]];
+				/* fall through */
 			case GETBEST_FAILED:
 			default:
 				cksleep_ms(ckp->blockpoll);
@@ -5102,22 +5102,22 @@ static double dsps_from_key(json_t *val, const char *key)
 		switch (endptr[0]) {
 			case 'E':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			case 'P':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			case 'T':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			case 'G':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			case 'M':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			case 'K':
 				ret *= (double)1000;
-				[[fallthrough]];
+				/* fall through */
 			default:
 				break;
 		}
