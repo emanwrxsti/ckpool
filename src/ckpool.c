@@ -1447,6 +1447,33 @@ static void parse_config(ckpool_t *ckp)
 		if (arr_size)
 			parse_btcds(ckp, arr_val, arr_size);
 	}
+	/* Select the coin profile and block-header proof-of-work algorithm.
+	 * The default remains Bitcoin/BCH compatible sha256d. */
+	json_get_string(&ckp->coin, json_conf, "coin");
+	if (ckp->coin) {
+		pow_algo_t coin_algo;
+
+		if (!pow_algo_parse(ckp->coin, &coin_algo))
+			quit(1, "Unsupported coin profile '%s'", ckp->coin);
+		ckp->pow_algo = coin_algo;
+	}
+	{
+		char *pow_name = NULL;
+
+		if (json_get_string(&pow_name, json_conf, "pow_algo")) {
+			pow_algo_t configured_algo;
+
+			if (!pow_algo_parse(pow_name, &configured_algo))
+				quit(1, "Unsupported pow_algo '%s'", pow_name);
+			if (ckp->coin && configured_algo != ckp->pow_algo)
+				quit(1, "coin '%s' conflicts with pow_algo '%s'", ckp->coin, pow_name);
+			ckp->pow_algo = configured_algo;
+			free(pow_name);
+		}
+	}
+	LOGNOTICE("Coin profile %s using block-header PoW %s",
+		  ckp->coin ? ckp->coin : "bitcoin", pow_algo_name(ckp->pow_algo));
+
 	json_get_string(&ckp->btcaddress, json_conf, "btcaddress");
 	json_get_string(&ckp->pooladdress, json_conf, "pooladdress");
 	json_get_double(&ckp->poolfee, json_conf, "poolfee");

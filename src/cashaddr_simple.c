@@ -78,90 +78,105 @@ static bool convert_bits_5to8(uint8_t *out, size_t *outlen, const uint8_t *in, s
 /* Extract hash160 from CashAddr - simplified version */
 bool cashaddr_decode_simple(const char *addr, uint8_t *hash160, bool *is_p2sh)
 {
-    if (!addr || !hash160 || !is_p2sh) return false;
-    
-    /* Find the separator */
-    const char *sep = strchr(addr, ':');
-    const char *payload;
-    size_t prefix_len;
-    
-    if (sep) {
-        prefix_len = sep - addr;
-        payload = sep + 1;
-    } else {
-        /* No prefix, assume it's just the payload */
-        payload = addr;
-        prefix_len = 0;
-    }
-    
-    /* Decode the payload */
-    size_t payload_len = strlen(payload);
-    if (payload_len < 14 || payload_len > 112) {
-        LOGDEBUG("Invalid payload length: %zu", payload_len);
+    const char *sep, *payload;
+    size_t prefix_len, payload_len, i;
+    uint8_t checksum_values[256];
+    uint8_t data[112];
+    uint8_t decoded[65];
+    size_t data_len = 0, decoded_len;
+    bool saw_lower = false, saw_upper = false;
+
+    if (!addr || !hash160 || !is_p2sh)
+        return false;
+
+    sep = strrchr(addr, ':');
+    if (!sep || sep == addr || !sep[1]) {
+        LOGDEBUG("CashAddr-style address requires an explicit prefix");
         return false;
     }
-    
-    uint8_t data[112];
-    size_t data_len = 0;
-    
-    /* Convert charset to values */
-    for (size_t i = 0; i < payload_len; ++i) {
-        int8_t value = CHARSET_REV[(uint8_t)tolower(payload[i])];
+
+    prefix_len = (size_t)(sep - addr);
+    payload = sep + 1;
+    payload_len = strlen(payload);
+    if (prefix_len > 83 || payload_len < 14 || payload_len > 112 ||
+        prefix_len + 1 + payload_len > sizeof(checksum_values)) {
+        LOGDEBUG("Invalid CashAddr-style address length");
+        return false;
+    }
+
+    for (i = 0; i < prefix_len; i++) {
+        unsigned char ch = (unsigned char)addr[i];
+
+        if (ch < 33 || ch > 126) {
+            LOGDEBUG("Invalid prefix character");
+            return false;
+        }
+        if (islower(ch)) saw_lower = true;
+        if (isupper(ch)) saw_upper = true;
+        checksum_values[i] = (uint8_t)(tolower(ch) & 0x1f);
+    }
+    checksum_values[prefix_len] = 0;
+
+    for (i = 0; i < payload_len; i++) {
+        unsigned char ch = (unsigned char)payload[i];
+        int8_t value;
+
+        if (islower(ch)) saw_lower = true;
+        if (isupper(ch)) saw_upper = true;
+        if (ch >= sizeof(CHARSET_REV)) {
+            LOGDEBUG("Invalid character in payload");
+            return false;
+        }
+        value = CHARSET_REV[(uint8_t)tolower(ch)];
         if (value < 0) {
             LOGDEBUG("Invalid character in payload: %c", payload[i]);
             return false;
         }
-        data[data_len++] = value;
+        data[data_len++] = (uint8_t)value;
+        checksum_values[prefix_len + 1 + i] = (uint8_t)value;
     }
-    
-    /* The last 8 characters are checksum (40 bits) */
-    if (data_len < 9) {  /* At least version + 1 byte payload + 8 checksum */
-        LOGDEBUG("Payload too short for checksum");
+
+    if (saw_lower && saw_upper) {
+        LOGDEBUG("Mixed-case CashAddr-style address is invalid");
         return false;
     }
 
-    /* Remove checksum from the end */
-    size_t data_without_checksum_len = data_len - 8;
-
-    /* Convert from 5-bit to 8-bit */
-    uint8_t decoded[65];
-    size_t decoded_len;
-
-    if (!convert_bits_5to8(decoded, &decoded_len, data, data_without_checksum_len)) {
-        LOGDEBUG("Failed to convert from 5-bit to 8-bit");
+    /* This polymod implementation returns the pre-XOR state. A valid
+     * CashAddr checksum therefore has the constant value 1. */
+    if (polymod(checksum_values, prefix_len + 1 + payload_len) != 1) {
+        LOGDEBUG("CashAddr-style checksum validation failed");
         return false;
     }
 
-    /* First byte is version/type byte */
-    if (decoded_len < 21) {  /* version + 20 bytes hash */
-        LOGDEBUG("Decoded length too short: %zu (expected at least 21)", decoded_len);
+    /* The last eight 5-bit symbols are the 40-bit checksum. */
+    if (data_len < 9)
+        return false;
+    data_len -= 8;
+
+    if (!convert_bits_5to8(decoded, &decoded_len, data, data_len)) {
+        LOGDEBUG("Failed to convert CashAddr-style payload to bytes");
         return false;
     }
 
-    /* Extract version byte */
-    uint8_t version = decoded[0];
-
-    /* Version byte format for CashAddr:
-     * Upper 4 bits: type (0 = P2PKH, 1 = P2SH)
-     * Lower 4 bits: size encoding
-     */
-    uint8_t type = (version >> 3) & 0x1f;
-    *is_p2sh = (type == 1);
-
-    /* Verify we have exactly 20 bytes for hash160 */
-    if (decoded_len != 21) {
-        LOGDEBUG("Invalid decoded length: %zu (expected 21 for hash160)", decoded_len);
+    /* CKPool currently creates standard 20-byte P2PKH and P2SH outputs. */
+    if (decoded_len != 21 || (decoded[0] & 0x07) != 0) {
+        LOGDEBUG("Unsupported CashAddr-style payload size");
         return false;
     }
 
-    /* Copy the hash160 (skip version byte) */
+    switch (decoded[0] >> 3) {
+    case 0:
+        *is_p2sh = false;
+        break;
+    case 1:
+        *is_p2sh = true;
+        break;
+    default:
+        LOGDEBUG("Unsupported CashAddr-style address type");
+        return false;
+    }
+
     memcpy(hash160, decoded + 1, 20);
-    
-    /* Log what we extracted */
-    char hash_hex[41];
-    __bin2hex(hash_hex, hash160, 20);
-    LOGDEBUG("Extracted hash160: %s (P2SH: %s)", hash_hex, *is_p2sh ? "true" : "false");
-    
     return true;
 }
 

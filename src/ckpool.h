@@ -17,6 +17,7 @@
 #include <sys/types.h>
 
 #include "libckpool.h"
+#include "pow.h"
 #include "uthash.h"
 
 #define RPC_TIMEOUT 60
@@ -219,6 +220,10 @@ struct ckpool_instance {
 	/* Have we given warnings about the inability to raise buf sizes */
 	bool wmem_warn;
 	bool rmem_warn;
+
+	/* Coin and block-header proof-of-work settings */
+	char *coin;
+	pow_algo_t pow_algo;
 
 	/* Bitcoind data */
 	int btcds;

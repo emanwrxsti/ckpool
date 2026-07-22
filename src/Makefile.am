@@ -22,7 +22,7 @@ endif
 	yasm -f x64 -f elf64 -X gnu -g dwarf2 -D LINUX -o $@ $<
 
 noinst_LIBRARIES = libckpool.a
-libckpool_a_SOURCES = libckpool.c libckpool.h sha2.c sha2.h sha256_arm_shani.c sha256_code_release \
+libckpool_a_SOURCES = libckpool.c libckpool.h sha2.c sha2.h sha512_256.c sha512_256.h pow.c pow.h sha256_arm_shani.c sha256_code_release \
 		      cashaddr_simple.c cashaddr_simple.h
 libckpool_a_LIBADD = $(native_objs)
 

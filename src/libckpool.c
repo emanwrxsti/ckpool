@@ -1826,7 +1826,8 @@ int address_to_txn(char *p2h, const char *addr, const bool script, const bool se
 	/* Check if it's a CashAddr format */
 	if (strncasecmp(addr, "bitcoincash:", 12) == 0 ||
 	    strncasecmp(addr, "bchtest:", 8) == 0 ||
-	    strncasecmp(addr, "bchreg:", 7) == 0) {
+	    strncasecmp(addr, "bchreg:", 7) == 0 ||
+	    strncasecmp(addr, "radaddr:", 8) == 0) {
 		return cashaddr_to_script(addr, (uint8_t *)p2h);
 	}
 

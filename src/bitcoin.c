@@ -49,7 +49,8 @@ bool validate_address(connsock_t *cs, const char *address, bool *script, bool *s
 	/* Check if it's a CashAddr format */
 	if (strncasecmp(address, "bitcoincash:", 12) == 0 ||
 	    strncasecmp(address, "bchtest:", 8) == 0 ||
-	    strncasecmp(address, "bchreg:", 7) == 0) {
+	    strncasecmp(address, "bchreg:", 7) == 0 ||
+	    strncasecmp(address, "radaddr:", 8) == 0) {
 		if (cashaddr_decode_simple(address, hash160, &is_p2sh)) {
 			is_cashaddr = true;
 			*script = is_p2sh;

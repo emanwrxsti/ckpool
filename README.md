@@ -1,5 +1,12 @@
 # EloPool - Production-Ready Bitcoin Cash Mining Pool Software
 
+> **Experimental Radiant support:** this fork now includes an RXD coin profile,
+> double SHA-512/256 block-header validation, `radaddr:` payout scripts, and
+> Radiant genesis-hash tests. See [RADIANT.md](RADIANT.md) and
+> [ckpool-rxd.conf](ckpool-rxd.conf). Production use still requires live-node
+> and miner integration testing.
+
+
 **EloPool** is a heavily enhanced fork of CKPool, specifically optimized for Bitcoin Cash (BCH) mining. This production-ready pool software includes native CashAddr support, pool operator fee distribution, multi-difficulty management, and enterprise-grade reliability features.
 
 ## 🚀 What's Different from Original CKPool?

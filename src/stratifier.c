@@ -1924,7 +1924,6 @@ share_diff(char *coinbase, const uchar *enonce1bin, const workbase_t *wb, const 
 {
 	unsigned char merkle_root[32], merkle_sha[64];
 	uint32_t *data32, *swap32, benonce32;
-	uchar hash1[32];
 	char data[80];
 	int i;
 
@@ -1972,8 +1971,7 @@ share_diff(char *coinbase, const uchar *enonce1bin, const workbase_t *wb, const 
 	data32 = (uint32_t *)data;
 	swap32 = (uint32_t *)swap;
 	flip_80(swap32, data32);
-	sha256(swap, 80, hash1);
-	sha256(hash1, 32, hash);
+	pow_hash(wb->ckp->pow_algo, swap, 80, hash);
 
 	/* Calculate the diff of the share here */
 	return diff_from_target(hash);
@@ -2241,13 +2239,11 @@ static void submit_node_block(ckpool_t *ckp, sdata_t *sdata, json_t *val)
 	json_get_int(&cblen, val, "cblen");
 	json_get_string(&swaphex, val, "swaphex");
 	if (coinbasehex && cblen && swaphex) {
-		uchar hash1[32];
 
 		coinbase = alloca(cblen);
 		hex2bin(coinbase, coinbasehex, cblen);
 		hex2bin(swap, swaphex, 80);
-		sha256(swap, 80, hash1);
-		sha256(hash1, 32, hash);
+		pow_hash(wb->ckp->pow_algo, swap, 80, hash);
 	} else {
 		/* Rebuild the old way if we can if the upstream pool is using
 		 * the old format only */
@@ -5980,7 +5976,7 @@ static double submission_diff(sdata_t *sdata, const stratum_instance_t *client, 
 	unsigned char merkle_root[32], merkle_sha[64];
 	uint32_t *data32, *swap32, benonce32;
 	char *coinbase, data[80];
-	uchar swap[80], hash1[32];
+	uchar swap[80];
 	int cblen, i, cb2len;
 	uchar *coinb2bin;
 	double ret;
@@ -6038,8 +6034,7 @@ static double submission_diff(sdata_t *sdata, const stratum_instance_t *client, 
 	data32 = (uint32_t *)data;
 	swap32 = (uint32_t *)swap;
 	flip_80(swap32, data32);
-	sha256(swap, 80, hash1);
-	sha256(hash1, 32, hash);
+	pow_hash(wb->ckp->pow_algo, swap, 80, hash);
 
 	/* Calculate the diff of the share here */
 	ret = diff_from_target(hash);
@@ -7274,15 +7269,14 @@ static void parse_remote_block(ckpool_t *ckp, sdata_t *sdata, json_t *val, const
 	if (unlikely(!wb))
 		LOGWARNING("Inadequate data locally to attempt submit of remote block");
 	else {
-		uchar swap[80], hash[32], hash1[32], flip32[32];
+		uchar swap[80], hash[32], flip32[32];
 		char *coinbase = alloca(cblen), *gbt_block;
 		char blockhash[68];
 
 		LOGWARNING("Possible remote block solve diff %lf !", diff);
 		hex2bin(coinbase, coinbasehex, cblen);
 		hex2bin(swap, swaphex, 80);
-		sha256(swap, 80, hash1);
-		sha256(hash1, 32, hash);
+		pow_hash(wb->ckp->pow_algo, swap, 80, hash);
 		gbt_block = process_block(wb, coinbase, cblen, swap, hash, flip32, blockhash);
 		/* Note nodes use jobid of the mapped_id instead of workinfoid */
 		json_set_int64(val, "jobid", wb->mapped_id);
