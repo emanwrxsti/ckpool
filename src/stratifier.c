@@ -6873,6 +6873,20 @@ static void parse_method(ckpool_t *ckp, sdata_t *sdata, stratum_instance_t *clie
 		return;
 	}
 
+	/* Some miners require a successful response before submitting work. */
+	if (cmdmatch(method, "mining.extranonce.subscribe")) {
+		json_t *val = json_object();
+
+		json_object_set_new_nocheck(val, "result", json_true());
+		json_object_set_nocheck(val, "id", id_val);
+		json_object_set_new_nocheck(val, "error", json_null());
+		stratum_add_send(sdata, val, client_id, SM_SUBSCRIBERESULT);
+
+		LOGINFO("Accepted mining.extranonce.subscribe from client %s",
+			client->identity);
+		return;
+	}
+
 	if (cmdmatch(method, "mining.suggest")) {
 		suggest_diff(ckp, client, method, params_val);
 		return;
@@ -7852,6 +7866,16 @@ static void sauth_process(ckpool_t *ckp, json_params_t *jp)
 		stratum_send_diff(sdata, client);
 		LOGINFO("Sent initial difficulty %ld to client %s after authorization",
 			client->diff, client->identity);
+	}
+
+	/*
+	 * Some ASIC firmware ignores the clean job sent before authorization.
+	 * Send a fresh clean job after the authorization response and difficulty.
+	 */
+	if (!ckp->proxy && !ckp->btcsolo) {
+		stratum_send_update(sdata, client_id, true);
+		LOGINFO("Sent clean post-authorization job to client %s",
+			client->identity);
 	}
 
 	if (client->remote) {
